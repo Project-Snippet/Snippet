@@ -1,9 +1,14 @@
 #![no_std]
 #![no_main]
 
+mod leds;
+
 use cortex_m_rt::entry;
 use panic_halt as _;
+use snippet_protocol::state::State;
 use stm32f3xx_hal::{delay::Delay, pac, prelude::*};
+
+use leds::{pattern, Leds};
 
 #[entry]
 fn main() -> ! {
@@ -16,12 +21,22 @@ fn main() -> ! {
     let mut delay = Delay::new(cp.SYST, clocks);
 
     let mut gpioe = dp.GPIOE.split(&mut rcc.ahb);
-    let mut led = gpioe
-        .pe9
-        .into_push_pull_output(&mut gpioe.moder, &mut gpioe.otyper);
+    let mut leds = Leds::new([
+        gpioe.pe8.into_push_pull_output(&mut gpioe.moder, &mut gpioe.otyper).downgrade().downgrade(),
+        gpioe.pe9.into_push_pull_output(&mut gpioe.moder, &mut gpioe.otyper).downgrade().downgrade(),
+        gpioe.pe10.into_push_pull_output(&mut gpioe.moder, &mut gpioe.otyper).downgrade().downgrade(),
+        gpioe.pe11.into_push_pull_output(&mut gpioe.moder, &mut gpioe.otyper).downgrade().downgrade(),
+        gpioe.pe12.into_push_pull_output(&mut gpioe.moder, &mut gpioe.otyper).downgrade().downgrade(),
+        gpioe.pe13.into_push_pull_output(&mut gpioe.moder, &mut gpioe.otyper).downgrade().downgrade(),
+        gpioe.pe14.into_push_pull_output(&mut gpioe.moder, &mut gpioe.otyper).downgrade().downgrade(),
+        gpioe.pe15.into_push_pull_output(&mut gpioe.moder, &mut gpioe.otyper).downgrade().downgrade(),
+    ]);
 
+    // Temporary: advance on a timer until the button is wired up in step C.
+    let mut state = State::Default;
     loop {
-        led.toggle().unwrap();
-        delay.delay_ms(500u16);
+        leds.show(pattern(state));
+        delay.delay_ms(2000u16);
+        state = state.next();
     }
 }
