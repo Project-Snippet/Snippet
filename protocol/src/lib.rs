@@ -1,5 +1,7 @@
 #![no_std]
 
+pub mod state;
+
 /// Messages the host sends to the device.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Message {
