@@ -5,7 +5,7 @@ mod leds;
 
 use cortex_m_rt::entry;
 use panic_halt as _;
-use snippet_protocol::state::State;
+use snippet_protocol::{decode, device::Device, encode, framer::FrameReader, Request, Response, MAX_FRAME};
 use cortex_m::asm::delay;
 use stm32f3xx_hal::{
     pac,
@@ -16,6 +16,30 @@ use usb_device::prelude::*;
 use usbd_serial::{SerialPort, USB_CLASS_CDC};
 
 use leds::{pattern, Leds};
+
+/// How many times to poll USB while waiting for room to send a reply.
+const SEND_ATTEMPTS: u32 = 100_000;
+
+/// Write all of `data`, polling USB as we go. Gives up rather than hang if
+/// the host has stopped reading.
+fn send_all<B: usb_device::bus::UsbBus>(
+    usb_dev: &mut UsbDevice<'_, B>,
+    serial: &mut SerialPort<'_, B>,
+    data: &[u8],
+) {
+    let mut sent = 0;
+    for _ in 0..SEND_ATTEMPTS {
+        usb_dev.poll(&mut [serial]);
+        match serial.write(&data[sent..]) {
+            Ok(n) => sent += n,
+            Err(UsbError::WouldBlock) => {}
+            Err(_) => return,
+        }
+        if sent == data.len() {
+            return;
+        }
+    }
+}
 
 #[entry]
 fn main() -> ! {
@@ -74,8 +98,9 @@ fn main() -> ! {
         .device_class(USB_CLASS_CDC)
         .build();
 
-    let mut state = State::Default;
-    leds.show(pattern(state));
+    let mut device = Device::new();
+    let mut reader = FrameReader::new();
+    leds.show(pattern(device.state));
 
     loop {
         if !usb_dev.poll(&mut [&mut serial]) {
@@ -83,15 +108,26 @@ fn main() -> ! {
         }
 
         let mut buf = [0u8; 64];
-        if let Ok(count) = serial.read(&mut buf) {
-            for &byte in &buf[..count] {
-                if byte == b'n' {
-                    state = state.next();
-                    leds.show(pattern(state));
-                }
+        let Ok(count) = serial.read(&mut buf) else {
+            continue;
+        };
+
+        for &byte in &buf[..count] {
+            let Some(frame) = reader.push(byte) else {
+                continue;
+            };
+
+            // Bad bytes from the host get a Rejected reply, never a crash.
+            let reply = match decode::<Request>(frame) {
+                Ok(request) => device.handle(request),
+                Err(_) => Response::Rejected,
+            };
+            leds.show(pattern(device.state));
+
+            let mut out = [0u8; MAX_FRAME];
+            if let Ok(encoded) = encode(&reply, &mut out) {
+                send_all(&mut usb_dev, &mut serial, encoded);
             }
-            // Echo back so the host can tell the board is listening.
-            serial.write(&buf[..count]).ok();
         }
     }
 }

@@ -1,6 +1,10 @@
 #![no_std]
 
+#[cfg(test)]
+extern crate std;
+
 pub mod device;
+pub mod framer;
 pub mod state;
 
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
