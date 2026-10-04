@@ -1,5 +1,7 @@
+use serde::{Deserialize, Serialize};
+
 /// The display modes of Snippet. The device owns the current state.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum State {
     Default,
     Clock,
