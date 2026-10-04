@@ -1,5 +1,6 @@
 #![no_std]
 
+pub mod device;
 pub mod state;
 
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -15,6 +16,13 @@ pub struct Time {
     pub hours: u8,
     pub minutes: u8,
     pub seconds: u8,
+}
+
+impl Time {
+    /// A 24-hour clock time: hours 0-23, minutes and seconds 0-59.
+    pub fn is_valid(&self) -> bool {
+        self.hours < 24 && self.minutes < 60 && self.seconds < 60
+    }
 }
 
 /// Messages the host sends to the device.
@@ -33,6 +41,8 @@ pub enum Request {
 pub enum Response {
     Pong,
     Ack,
+    /// The request was understood but its contents were not acceptable.
+    Rejected,
     State(State),
     Time(Time),
 }
@@ -77,6 +87,7 @@ mod tests {
     fn every_response_survives_a_round_trip() {
         round_trip(Response::Pong);
         round_trip(Response::Ack);
+        round_trip(Response::Rejected);
         round_trip(Response::State(State::Cycle));
         round_trip(Response::Time(Time { hours: 0, minutes: 0, seconds: 0 }));
     }
