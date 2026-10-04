@@ -2,8 +2,9 @@
 name = "snippet-host"
 version = "0.1.0"
 edition = "2021"
-default-run = "snippet-host"
+default-run = "snippet"
 
 [dependencies]
 snippet-protocol = { path = "../protocol" }
 serialport = { version = "4", default-features = false }
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
