@@ -1,5 +1,5 @@
 use crate::state::State;
-use crate::{Request, Response, Time};
+use crate::{Date, Request, Response, Time};
 
 /// Everything the device remembers. The firmware owns one of these and
 /// feeds it every request it receives.
@@ -7,6 +7,7 @@ use crate::{Request, Response, Time};
 pub struct Device {
     pub state: State,
     pub time: Time,
+    pub date: Date,
 }
 
 impl Device {
@@ -14,6 +15,7 @@ impl Device {
         Device {
             state: State::Default,
             time: Time { hours: 0, minutes: 0, seconds: 0 },
+            date: Date { year: 2000, month: 1, day: 1 },
         }
     }
 
@@ -36,6 +38,12 @@ impl Device {
             }
             Request::SetTime(_) => Response::Rejected,
             Request::GetTime => Response::Time(self.time),
+            Request::SetDate(date) if date.is_valid() => {
+                self.date = date;
+                Response::Ack
+            }
+            Request::SetDate(_) => Response::Rejected,
+            Request::GetDate => Response::Date(self.date),
         }
     }
 }
@@ -97,5 +105,23 @@ mod tests {
             assert_eq!(device.handle(Request::SetTime(bad)), Response::Rejected);
         }
         assert_eq!(device.handle(Request::GetTime), Response::Time(good));
+    }
+
+    #[test]
+    fn stored_date_is_returned_exactly() {
+        let mut device = Device::new();
+        let date = Date { year: 2026, month: 10, day: 4 };
+        assert_eq!(device.handle(Request::SetDate(date)), Response::Ack);
+        assert_eq!(device.handle(Request::GetDate), Response::Date(date));
+    }
+
+    #[test]
+    fn invalid_date_is_rejected_and_old_date_kept() {
+        let mut device = Device::new();
+        let good = Date { year: 2026, month: 10, day: 4 };
+        device.handle(Request::SetDate(good));
+        let bad = Date { year: 2026, month: 2, day: 30 };
+        assert_eq!(device.handle(Request::SetDate(bad)), Response::Rejected);
+        assert_eq!(device.handle(Request::GetDate), Response::Date(good));
     }
 }
