@@ -1,0 +1,17 @@
+[package]
+name = "snippet-firmware"
+version = "0.1.0"
+edition = "2021"
+
+# An empty [workspace] makes this crate its own workspace root, so
+# `cargo check` at the repo root never tries to build it for the PC.
+[workspace]
+
+[dependencies]
+cortex-m = { version = "0.7", features = ["critical-section-single-core"] }
+cortex-m-rt = "0.7"
+panic-halt = "1.0"
+stm32f3xx-hal = { version = "0.10", features = ["stm32f303xc", "rt", "usb"] }
+usb-device = "0.2"
+usbd-serial = "0.1"
+snippet-protocol = { path = "../protocol" }
