@@ -55,6 +55,26 @@ fn days_in_month(year: u16, month: u8) -> u8 {
     }
 }
 
+/// A snapshot of the PC's system status for the System state.
+/// `None` means "not available on this machine" (for example no battery).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SystemStatus {
+    pub battery_percent: Option<u8>,
+    pub charging: bool,
+    pub volume_percent: u8,
+    pub muted: bool,
+    pub wifi_signal_percent: Option<u8>,
+}
+
+impl SystemStatus {
+    /// Every percentage is 0-100.
+    pub fn is_valid(&self) -> bool {
+        self.battery_percent.map_or(true, |p| p <= 100)
+            && self.volume_percent <= 100
+            && self.wifi_signal_percent.map_or(true, |p| p <= 100)
+    }
+}
+
 /// Messages the host sends to the device.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Request {
@@ -66,6 +86,8 @@ pub enum Request {
     GetTime,
     SetDate(Date),
     GetDate,
+    SetSystemStatus(SystemStatus),
+    GetSystemStatus,
 }
 
 /// Messages the device sends back to the host.
@@ -78,6 +100,7 @@ pub enum Response {
     State(State),
     Time(Time),
     Date(Date),
+    SystemStatus(SystemStatus),
 }
 
 /// Serialize `value` into `buf` as one COBS frame (it ends with a 0x00 byte).
@@ -158,5 +181,41 @@ mod tests {
         assert!(!date(2026, 0, 1).is_valid());
         assert!(!date(2026, 1, 0).is_valid());
         assert!(!date(1999, 12, 31).is_valid());
+    }
+
+    const STATUS: SystemStatus = SystemStatus {
+        battery_percent: Some(87),
+        charging: true,
+        volume_percent: 40,
+        muted: false,
+        wifi_signal_percent: None,
+    };
+
+    #[test]
+    fn system_status_survives_a_round_trip() {
+        round_trip(Request::SetSystemStatus(STATUS));
+        round_trip(Request::GetSystemStatus);
+        round_trip(Response::SystemStatus(STATUS));
+    }
+
+    #[test]
+    fn largest_system_status_still_fits_in_a_frame() {
+        let biggest = SystemStatus {
+            battery_percent: Some(100),
+            charging: true,
+            volume_percent: 100,
+            muted: true,
+            wifi_signal_percent: Some(100),
+        };
+        let mut buf = [0u8; MAX_FRAME];
+        assert!(encode(&Request::SetSystemStatus(biggest), &mut buf).is_ok());
+    }
+
+    #[test]
+    fn system_status_percentages_are_checked() {
+        assert!(STATUS.is_valid());
+        assert!(!SystemStatus { battery_percent: Some(101), ..STATUS }.is_valid());
+        assert!(!SystemStatus { volume_percent: 101, ..STATUS }.is_valid());
+        assert!(!SystemStatus { wifi_signal_percent: Some(200), ..STATUS }.is_valid());
     }
 }

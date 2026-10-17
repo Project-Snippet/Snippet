@@ -1,5 +1,5 @@
 use crate::state::State;
-use crate::{Date, Request, Response, Time};
+use crate::{Date, Request, Response, SystemStatus, Time};
 
 /// Everything the device remembers. The firmware owns one of these and
 /// feeds it every request it receives.
@@ -8,6 +8,7 @@ pub struct Device {
     pub state: State,
     pub time: Time,
     pub date: Date,
+    pub system: SystemStatus,
 }
 
 impl Device {
@@ -16,6 +17,13 @@ impl Device {
             state: State::Default,
             time: Time { hours: 0, minutes: 0, seconds: 0 },
             date: Date { year: 2000, month: 1, day: 1 },
+            system: SystemStatus {
+                battery_percent: None,
+                charging: false,
+                volume_percent: 0,
+                muted: false,
+                wifi_signal_percent: None,
+            },
         }
     }
 
@@ -44,6 +52,12 @@ impl Device {
             }
             Request::SetDate(_) => Response::Rejected,
             Request::GetDate => Response::Date(self.date),
+            Request::SetSystemStatus(status) if status.is_valid() => {
+                self.system = status;
+                Response::Ack
+            }
+            Request::SetSystemStatus(_) => Response::Rejected,
+            Request::GetSystemStatus => Response::SystemStatus(self.system),
         }
     }
 }
@@ -123,5 +137,28 @@ mod tests {
         let bad = Date { year: 2026, month: 2, day: 30 };
         assert_eq!(device.handle(Request::SetDate(bad)), Response::Rejected);
         assert_eq!(device.handle(Request::GetDate), Response::Date(good));
+    }
+
+    #[test]
+    fn stored_system_status_is_returned_exactly() {
+        let mut device = Device::new();
+        let status = SystemStatus {
+            battery_percent: Some(55),
+            charging: false,
+            volume_percent: 30,
+            muted: true,
+            wifi_signal_percent: Some(80),
+        };
+        assert_eq!(device.handle(Request::SetSystemStatus(status)), Response::Ack);
+        assert_eq!(device.handle(Request::GetSystemStatus), Response::SystemStatus(status));
+    }
+
+    #[test]
+    fn invalid_system_status_is_rejected_and_old_status_kept() {
+        let mut device = Device::new();
+        let before = device.system;
+        let bad = SystemStatus { volume_percent: 250, ..before };
+        assert_eq!(device.handle(Request::SetSystemStatus(bad)), Response::Rejected);
+        assert_eq!(device.handle(Request::GetSystemStatus), Response::SystemStatus(before));
     }
 }
