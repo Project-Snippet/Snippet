@@ -4,8 +4,11 @@ use std::sync::mpsc::{self, RecvTimeoutError};
 use std::thread;
 use std::time::Duration;
 
-use snippet_host::{clock, link::Link};
+use snippet_host::{clock, link::Link, system};
 use snippet_protocol::{Request, Response};
+
+/// How many one-second ticks pass between system status updates.
+const STATUS_EVERY_TICKS: u32 = 5;
 
 enum Command {
     NextState,
@@ -50,12 +53,25 @@ fn run() -> Result<(), Box<dyn Error>> {
     let commands = spawn_input_thread();
 
     println!("Connected to {path}. Type 's' + Enter for next state, 'q' + Enter to quit.");
+    let mut tick: u32 = 0;
+    let mut status = system::read();
     loop {
         let (date, time) = clock::now();
         send_expecting_ack(&mut link, Request::SetDate(date))?;
         send_expecting_ack(&mut link, Request::SetTime(time))?;
+        if tick % STATUS_EVERY_TICKS == 0 {
+            status = system::read();
+            send_expecting_ack(&mut link, Request::SetSystemStatus(status))?;
+        }
+        tick = tick.wrapping_add(1);
+
+        let battery = match status.battery_percent {
+            Some(percent) if status.charging => format!("battery {percent}% (charging)"),
+            Some(percent) => format!("battery {percent}%"),
+            None => "no battery".to_string(),
+        };
         print!(
-            "\r{:04}-{:02}-{:02} {:02}:{:02}:{:02}  ",
+            "\r{:04}-{:02}-{:02} {:02}:{:02}:{:02}  {battery}   ",
             date.year, date.month, date.day, time.hours, time.minutes, time.seconds
         );
         io::stdout().flush()?;
