@@ -8,3 +8,4 @@ default-run = "snippet"
 snippet-protocol = { path = "../protocol" }
 serialport = { version = "4", default-features = false }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
+starship-battery = "0.12.0"
