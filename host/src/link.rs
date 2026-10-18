@@ -67,9 +67,9 @@ impl<P: Read + Write> Link<P> {
     }
 
     /// Send one request and wait for the device's reply.
-    pub fn send(&mut self, request: Request) -> Result<Response, LinkError> {
+    pub fn send(&mut self, request: &Request) -> Result<Response, LinkError> {
         let mut out = [0u8; MAX_FRAME];
-        let frame = encode(&request, &mut out)?;
+        let frame = encode(request, &mut out)?;
         self.port.write_all(frame)?;
 
         // Read one byte at a time until the 0x00 that ends the frame.
@@ -150,22 +150,22 @@ mod tests {
 
     #[test]
     fn ping_gets_pong() {
-        assert_eq!(FakeBoard::link().send(Request::Ping).unwrap(), Response::Pong);
+        assert_eq!(FakeBoard::link().send(&Request::Ping).unwrap(), Response::Pong);
     }
 
     #[test]
     fn time_set_over_the_link_reads_back_the_same() {
         let mut link = FakeBoard::link();
         let time = Time { hours: 14, minutes: 32, seconds: 5 };
-        assert_eq!(link.send(Request::SetTime(time)).unwrap(), Response::Ack);
-        assert_eq!(link.send(Request::GetTime).unwrap(), Response::Time(time));
+        assert_eq!(link.send(&Request::SetTime(time)).unwrap(), Response::Ack);
+        assert_eq!(link.send(&Request::GetTime).unwrap(), Response::Time(time));
     }
 
     #[test]
     fn states_step_over_the_link() {
         let mut link = FakeBoard::link();
-        assert_eq!(link.send(Request::NextState).unwrap(), Response::Ack);
-        assert_eq!(link.send(Request::GetState).unwrap(), Response::State(State::Clock));
+        assert_eq!(link.send(&Request::NextState).unwrap(), Response::Ack);
+        assert_eq!(link.send(&Request::GetState).unwrap(), Response::State(State::Clock));
     }
 
     /// A port that accepts writes but never answers.
@@ -190,6 +190,6 @@ mod tests {
     #[test]
     fn a_silent_device_is_an_error_not_a_hang() {
         let mut link = Link::new(SilentBoard);
-        assert!(matches!(link.send(Request::Ping), Err(LinkError::Io(_))));
+        assert!(matches!(link.send(&Request::Ping), Err(LinkError::Io(_))));
     }
 }

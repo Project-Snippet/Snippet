@@ -8,7 +8,7 @@ use snippet_protocol::{Request, Response, Time};
 fn check(link: &mut Link<impl std::io::Read + std::io::Write>, request: Request, expected: Response)
     -> Result<(), Box<dyn Error>>
 {
-    let reply = link.send(request)?;
+    let reply = link.send(&request)?;
     println!("{request:?} -> {reply:?}");
     assert_eq!(reply, expected, "unexpected reply to {request:?}");
     Ok(())

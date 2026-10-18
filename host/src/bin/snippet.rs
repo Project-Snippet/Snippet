@@ -40,7 +40,7 @@ fn spawn_input_thread() -> mpsc::Receiver<Command> {
 
 /// Send a request that should be answered with `Ack`.
 fn send_expecting_ack(link: &mut Link<impl io::Read + io::Write>, request: Request) -> Result<(), Box<dyn Error>> {
-    match link.send(request)? {
+    match link.send(&request)? {
         Response::Ack => Ok(()),
         other => Err(format!("device answered {request:?} with {other:?}").into()),
     }
@@ -84,7 +84,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         match commands.recv_timeout(Duration::from_secs(1)) {
             Ok(Command::NextState) => {
                 send_expecting_ack(&mut link, Request::NextState)?;
-                if let Response::State(state) = link.send(Request::GetState)? {
+                if let Response::State(state) = link.send(&Request::GetState)? {
                     println!("\nState is now {state:?}");
                 }
             }
