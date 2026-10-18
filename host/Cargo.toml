@@ -9,3 +9,6 @@ snippet-protocol = { path = "../protocol" }
 serialport = { version = "4", default-features = false }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 starship-battery = "0.12.0"
+
+[target."cfg(windows)".dependencies]
+windows = { version = "0.62.2", features = ["Win32_Media_Audio", "Win32_Media_Audio_Endpoints", "Win32_System_Com", "Win32_System_Com_StructuredStorage", "Win32_System_Variant"] }
