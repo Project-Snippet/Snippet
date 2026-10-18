@@ -1,3 +1,4 @@
+use crate::volume;
 use snippet_protocol::SystemStatus;
 use starship_battery::units::ratio::percent;
 use starship_battery::{Manager, State};
@@ -26,14 +27,16 @@ pub fn battery() -> Option<(u8, bool)> {
 }
 
 /// A snapshot of everything we can read so far.
-/// Volume and wifi are placeholders until they are implemented.
+/// Wifi is a placeholder until it is implemented. Volume reads 0 and unmuted
+/// on machines where it cannot be read (anything but Windows).
 pub fn read() -> SystemStatus {
     let battery = battery();
+    let volume = volume::read();
     SystemStatus {
         battery_percent: battery.map(|(charge, _)| charge),
         charging: battery.is_some_and(|(_, charging)| charging),
-        volume_percent: 0,
-        muted: false,
+        volume_percent: volume.map_or(0, |(level, _)| level),
+        muted: volume.is_some_and(|(_, muted)| muted),
         wifi_signal_percent: None,
     }
 }

@@ -70,8 +70,13 @@ fn run() -> Result<(), Box<dyn Error>> {
             Some(percent) => format!("battery {percent}%"),
             None => "no battery".to_string(),
         };
+        let volume = if status.muted {
+            "volume muted".to_string()
+        } else {
+            format!("volume {}%", status.volume_percent)
+        };
         print!(
-            "\r{:04}-{:02}-{:02} {:02}:{:02}:{:02}  {battery}   ",
+            "\r{:04}-{:02}-{:02} {:02}:{:02}:{:02}  {battery}  {volume}   ",
             date.year, date.month, date.day, time.hours, time.minutes, time.seconds
         );
         io::stdout().flush()?;
