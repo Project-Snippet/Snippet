@@ -1,14 +1,15 @@
 use crate::state::State;
-use crate::{Date, Request, Response, SystemStatus, Time};
+use crate::{AudioDevices, Date, Request, Response, SystemStatus, Time};
 
 /// Everything the device remembers. The firmware owns one of these and
 /// feeds it every request it receives.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Device {
     pub state: State,
     pub time: Time,
     pub date: Date,
     pub system: SystemStatus,
+    pub audio: AudioDevices,
 }
 
 impl Device {
@@ -24,6 +25,7 @@ impl Device {
                 muted: false,
                 wifi_signal_percent: None,
             },
+            audio: AudioDevices { output: None, input: None },
         }
     }
 
@@ -58,6 +60,11 @@ impl Device {
             }
             Request::SetSystemStatus(_) => Response::Rejected,
             Request::GetSystemStatus => Response::SystemStatus(self.system),
+            Request::SetAudioDevices(audio) => {
+                self.audio = audio;
+                Response::Ack
+            }
+            Request::GetAudioDevices => Response::AudioDevices(self.audio.clone()),
         }
     }
 }
@@ -160,5 +167,17 @@ mod tests {
         let bad = SystemStatus { volume_percent: 250, ..before };
         assert_eq!(device.handle(Request::SetSystemStatus(bad)), Response::Rejected);
         assert_eq!(device.handle(Request::GetSystemStatus), Response::SystemStatus(before));
+    }
+
+    #[test]
+    fn stored_audio_devices_are_returned_exactly() {
+        use crate::device_name;
+        let mut device = Device::new();
+        let audio = AudioDevices {
+            output: Some(device_name("Speakers")),
+            input: Some(device_name("Microphone")),
+        };
+        assert_eq!(device.handle(Request::SetAudioDevices(audio.clone())), Response::Ack);
+        assert_eq!(device.handle(Request::GetAudioDevices), Response::AudioDevices(audio));
     }
 }

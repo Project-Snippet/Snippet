@@ -13,7 +13,7 @@ use state::State;
 pub use postcard::Error;
 
 /// Longest encoded message (including the COBS framing) we expect to send.
-pub const MAX_FRAME: usize = 16;
+pub const MAX_FRAME: usize = 64;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Time {
@@ -75,8 +75,33 @@ impl SystemStatus {
     }
 }
 
+/// Longest audio device name we carry, in bytes.
+pub const NAME_LEN: usize = 24;
+
+/// A short text label with a fixed capacity, so no heap is needed.
+pub type DeviceName = heapless::String<NAME_LEN>;
+
+/// Copy `text` into a `DeviceName`, cutting it short (never mid-character)
+/// if it is too long.
+pub fn device_name(text: &str) -> DeviceName {
+    let mut name = DeviceName::new();
+    for c in text.chars() {
+        if name.push(c).is_err() {
+            break;
+        }
+    }
+    name
+}
+
+/// The default speaker and microphone. `None` means no such device.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AudioDevices {
+    pub output: Option<DeviceName>,
+    pub input: Option<DeviceName>,
+}
+
 /// Messages the host sends to the device.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Request {
     Ping,
     NextState,
@@ -88,10 +113,12 @@ pub enum Request {
     GetDate,
     SetSystemStatus(SystemStatus),
     GetSystemStatus,
+    SetAudioDevices(AudioDevices),
+    GetAudioDevices,
 }
 
 /// Messages the device sends back to the host.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Response {
     Pong,
     Ack,
@@ -101,6 +128,7 @@ pub enum Response {
     Time(Time),
     Date(Date),
     SystemStatus(SystemStatus),
+    AudioDevices(AudioDevices),
 }
 
 /// Serialize `value` into `buf` as one COBS frame (it ends with a 0x00 byte).
@@ -117,6 +145,7 @@ pub fn decode<T: DeserializeOwned>(frame: &mut [u8]) -> Result<T, Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::format;
 
     fn round_trip<T>(value: T)
     where
@@ -217,5 +246,43 @@ mod tests {
         assert!(!SystemStatus { battery_percent: Some(101), ..STATUS }.is_valid());
         assert!(!SystemStatus { volume_percent: 101, ..STATUS }.is_valid());
         assert!(!SystemStatus { wifi_signal_percent: Some(200), ..STATUS }.is_valid());
+    }
+
+    #[test]
+    fn long_names_are_cut_to_capacity() {
+        let long = "Speakers (Realtek High Definition Audio)";
+        let name = device_name(long);
+        assert_eq!(name.len(), NAME_LEN);
+        assert!(long.starts_with(name.as_str()));
+        assert_eq!(device_name("Headset").as_str(), "Headset");
+    }
+
+    #[test]
+    fn names_are_never_cut_in_the_middle_of_a_character() {
+        // 'é' is two bytes, so 12 of them fill the capacity exactly.
+        let name = device_name(&"é".repeat(30));
+        assert_eq!(name.chars().count(), NAME_LEN / 2);
+        let odd = device_name(&format!("a{}", "é".repeat(30)));
+        assert!(odd.len() <= NAME_LEN);
+        assert!(odd.as_str().chars().all(|c| c == 'a' || c == 'é'));
+    }
+
+    #[test]
+    fn audio_devices_survive_a_round_trip() {
+        let devices = AudioDevices {
+            output: Some(device_name("Speakers")),
+            input: None,
+        };
+        round_trip(Request::SetAudioDevices(devices.clone()));
+        round_trip(Request::GetAudioDevices);
+        round_trip(Response::AudioDevices(devices));
+    }
+
+    #[test]
+    fn largest_audio_devices_message_fits_in_a_frame() {
+        let full = device_name(&"é".repeat(30));
+        let biggest = AudioDevices { output: Some(full.clone()), input: Some(full) };
+        let mut buf = [0u8; MAX_FRAME];
+        assert!(encode(&Request::SetAudioDevices(biggest), &mut buf).is_ok());
     }
 }
